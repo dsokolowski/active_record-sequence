@@ -8,7 +8,7 @@ module ActiveRecord
 
       def initialize(name, options = {})
         @options = options
-        @parts = [format('CREATE SEQUENCE %s', name)]
+        @parts = [format('CREATE SEQUENCE IF NOT EXISTS %s', name)]
       end
 
       def to_sql

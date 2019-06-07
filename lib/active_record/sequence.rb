@@ -15,7 +15,7 @@ module ActiveRecord
 
     class << self
       CREATE_ERRORS = {
-        'PG::DuplicateTable' => ActiveRecord::Sequence::AlreadyExist,
+        'PG::DuplicateTable' => ActiveRecord::Sequence::AlreadyExist
       }.freeze
       # Create sequence
       # @param name [String]
@@ -42,7 +42,7 @@ module ActiveRecord
         end
         new(name)
       end
-
+      
       DROP_ERRORS = {
         'PG::UndefinedTable' => NotExist,
       }.freeze
@@ -70,7 +70,8 @@ module ActiveRecord
       def handle_postgres_errors(mappings)
         yield
       rescue ActiveRecord::StatementInvalid => error
-        library_error = mappings.fetch(error.cause.class.name) { raise }
+        Rails.logger.error "Thread error #{error.message}    #{error.backtrace.join(" \n ")}"
+        library_error = mappings.fetch(error.class.name) { raise }
         raise library_error
       end
     end
@@ -84,8 +85,7 @@ module ActiveRecord
 
     NEXT_ERRORS = {
       'PG::ObjectNotInPrerequisiteState' => StopIteration,
-      'PG::SequenceGeneratorLimitExceeded' => StopIteration,
-      'PG::UndefinedTable' => ActiveRecord::Sequence::NotExist,
+      'PG::UndefinedTable' => ActiveRecord::Sequence::NotExist
     }.freeze
 
     # @return [Integer]
@@ -98,7 +98,7 @@ module ActiveRecord
 
     PEEK_ERRORS = {
       'PG::ObjectNotInPrerequisiteState' => ActiveRecord::Sequence::CurrentValueUndefined,
-      'PG::UndefinedTable' => ActiveRecord::Sequence::NotExist,
+      'PG::UndefinedTable' => ActiveRecord::Sequence::NotExist
     }.freeze
 
     # @return [Integer]
@@ -108,11 +108,23 @@ module ActiveRecord
         execute(current_sql, name)
       end
     end
+    
+    SETVAL_ERRORS = {
+      'PG::ObjectNotInPrerequisiteState' => ActiveRecord::Sequence::CurrentValueUndefined,
+      'PG::UndefinedTable' => ActiveRecord::Sequence::NotExist
+    }.freeze
+    
+    def setval(value)
+      current_sql = 'SELECT setval(%s,%d)'.freeze
+      handle_postgres_errors(SETVAL_ERRORS) do
+        execute(current_sql, name, value)
+      end
+    end
 
     private
 
-    delegate :handle_postgres_errors, to: :class
-    delegate :with_connection, to: :class
+    def handle_postgres_errors(mappings, &block); self.class.handle_postgres_errors(mappings, &block); end
+    def with_connection(&block); self.class.with_connection(&block); end
 
     def execute(sql, *args)
       with_connection do |connection|
